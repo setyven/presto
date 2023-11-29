@@ -172,33 +172,6 @@ public class TestingPrestoServer
     private final ServerInfoResource serverInfoResource;
     private final ResourceManagerClusterStateProvider clusterStateProvider;
 
-    public static class TestShutdownAction
-            implements ShutdownAction
-    {
-        private final CountDownLatch shutdownCalled = new CountDownLatch(1);
-
-        @GuardedBy("this")
-        private boolean isShutdown;
-
-        @Override
-        public synchronized void onShutdown()
-        {
-            isShutdown = true;
-            shutdownCalled.countDown();
-        }
-
-        public void waitForShutdownComplete(long millis)
-                throws InterruptedException
-        {
-            shutdownCalled.await(millis, MILLISECONDS);
-        }
-
-        public synchronized boolean isShutdown()
-        {
-            return isShutdown;
-        }
-    }
-
     public TestingPrestoServer()
             throws Exception
     {
@@ -420,6 +393,71 @@ public class TestingPrestoServer
         announcer.forceAnnounce();
 
         refreshNodes();
+    }
+
+    private static void updateConnectorIdAnnouncement(Announcer announcer, ConnectorId connectorId, InternalNodeManager nodeManager)
+    {
+        //
+        // This code was copied from PrestoServer, and is a hack that should be removed when the connectorId property is removed
+        //
+
+        // get existing announcement
+        ServiceAnnouncement announcement = getPrestoAnnouncement(announcer.getServiceAnnouncements());
+
+        // update connectorIds property
+        Map<String, String> properties = new LinkedHashMap<>(announcement.getProperties());
+        String property = nullToEmpty(properties.get("connectorIds"));
+        Set<String> connectorIds = new LinkedHashSet<>(Splitter.on(',').trimResults().omitEmptyStrings().splitToList(property));
+        connectorIds.add(connectorId.toString());
+        properties.put("connectorIds", Joiner.on(',').join(connectorIds));
+
+        // update announcement
+        announcer.removeServiceAnnouncement(announcement.getId());
+        announcer.addServiceAnnouncement(serviceAnnouncement(announcement.getType()).addProperties(properties).build());
+        announcer.forceAnnounce();
+
+        nodeManager.refreshNodes();
+    }
+
+    // TODO: announcement does not work for coordinator
+    private static void updateThriftServerAddressAnnouncement(Announcer announcer, int thriftPort, InternalNodeManager nodeManager)
+    {
+        // get existing announcement
+        ServiceAnnouncement announcement = getPrestoAnnouncement(announcer.getServiceAnnouncements());
+
+        // update announcement and thrift port property
+        Map<String, String> properties = new LinkedHashMap<>(announcement.getProperties());
+        properties.put("thriftServerPort", String.valueOf(thriftPort));
+        announcer.removeServiceAnnouncement(announcement.getId());
+        announcer.addServiceAnnouncement(serviceAnnouncement(announcement.getType()).addProperties(properties).build());
+        announcer.forceAnnounce();
+
+        nodeManager.refreshNodes();
+    }
+
+    private static ServiceAnnouncement getPrestoAnnouncement(Set<ServiceAnnouncement> announcements)
+    {
+        for (ServiceAnnouncement announcement : announcements) {
+            if (announcement.getType().equals("presto")) {
+                return announcement;
+            }
+        }
+        throw new RuntimeException("Presto announcement not found: " + announcements);
+    }
+
+    private static Path tempDirectory()
+    {
+        try {
+            return createTempDirectory("PrestoTest");
+        }
+        catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static int driftServerPort(DriftServer server)
+    {
+        return ((DriftNettyServerTransport) server.getServerTransport()).getPort();
     }
 
     private Map<String, String> getServerProperties(
@@ -696,63 +734,30 @@ public class TestingPrestoServer
         requestBlocker.unblock();
     }
 
-    private static void updateConnectorIdAnnouncement(Announcer announcer, ConnectorId connectorId, InternalNodeManager nodeManager)
+    public static class TestShutdownAction
+            implements ShutdownAction
     {
-        //
-        // This code was copied from PrestoServer, and is a hack that should be removed when the connectorId property is removed
-        //
+        private final CountDownLatch shutdownCalled = new CountDownLatch(1);
 
-        // get existing announcement
-        ServiceAnnouncement announcement = getPrestoAnnouncement(announcer.getServiceAnnouncements());
+        @GuardedBy("this")
+        private boolean isShutdown;
 
-        // update connectorIds property
-        Map<String, String> properties = new LinkedHashMap<>(announcement.getProperties());
-        String property = nullToEmpty(properties.get("connectorIds"));
-        Set<String> connectorIds = new LinkedHashSet<>(Splitter.on(',').trimResults().omitEmptyStrings().splitToList(property));
-        connectorIds.add(connectorId.toString());
-        properties.put("connectorIds", Joiner.on(',').join(connectorIds));
-
-        // update announcement
-        announcer.removeServiceAnnouncement(announcement.getId());
-        announcer.addServiceAnnouncement(serviceAnnouncement(announcement.getType()).addProperties(properties).build());
-        announcer.forceAnnounce();
-
-        nodeManager.refreshNodes();
-    }
-
-    // TODO: announcement does not work for coordinator
-    private static void updateThriftServerAddressAnnouncement(Announcer announcer, int thriftPort, InternalNodeManager nodeManager)
-    {
-        // get existing announcement
-        ServiceAnnouncement announcement = getPrestoAnnouncement(announcer.getServiceAnnouncements());
-
-        // update announcement and thrift port property
-        Map<String, String> properties = new LinkedHashMap<>(announcement.getProperties());
-        properties.put("thriftServerPort", String.valueOf(thriftPort));
-        announcer.removeServiceAnnouncement(announcement.getId());
-        announcer.addServiceAnnouncement(serviceAnnouncement(announcement.getType()).addProperties(properties).build());
-        announcer.forceAnnounce();
-
-        nodeManager.refreshNodes();
-    }
-
-    private static ServiceAnnouncement getPrestoAnnouncement(Set<ServiceAnnouncement> announcements)
-    {
-        for (ServiceAnnouncement announcement : announcements) {
-            if (announcement.getType().equals("presto")) {
-                return announcement;
-            }
+        @Override
+        public synchronized void onShutdown()
+        {
+            isShutdown = true;
+            shutdownCalled.countDown();
         }
-        throw new RuntimeException("Presto announcement not found: " + announcements);
-    }
 
-    private static Path tempDirectory()
-    {
-        try {
-            return createTempDirectory("PrestoTest");
+        public void waitForShutdownComplete(long millis)
+                throws InterruptedException
+        {
+            shutdownCalled.await(millis, MILLISECONDS);
         }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
+
+        public synchronized boolean isShutdown()
+        {
+            return isShutdown;
         }
     }
 
@@ -800,10 +805,5 @@ public class TestingPrestoServer
 
         @Override
         public void destroy() {}
-    }
-
-    private static int driftServerPort(DriftServer server)
-    {
-        return ((DriftNettyServerTransport) server.getServerTransport()).getPort();
     }
 }

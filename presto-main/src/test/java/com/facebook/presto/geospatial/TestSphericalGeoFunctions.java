@@ -260,6 +260,22 @@ public class TestSphericalGeoFunctions
         assertSphericalCentroid("MULTIPOINT (0 -45, 0 45, 30 0, -30 0)", new Point(0, 0));
     }
 
+    @Test
+    public void tesLatlongDistToMultipolygon()
+    {
+        String wkt = "POLYGON((-180 -90, -180 90, 180 90, 180 -90, -180 -90))";
+        String projection = format("round(latlong_dist_to_multipolygon(40, -90, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+        assertFunction(projection, DOUBLE, 5559.75506);
+    }
+
+    @Test
+    public void tesLatlongDistToMultipolygonWithMultipolygon()
+    {
+        String wkt = "MULTIPOLYGON (((-40.2 28.9, -40.2 31.9, -37.2 31.9, -37.2 28.9, -40.2 28.9)), ((-39.2 29.9, -39.2 30.9, -38.2 30.9, -38.2 29.9, -39.2 29.9)))";
+        String projection = format("round(latlong_dist_to_multipolygon(40, 50, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+        assertFunction(projection, DOUBLE, 7582.98970);
+    }
+
     private void assertSphericalCentroid(String wkt, Point centroid)
     {
         String projection = format("ST_Centroid(to_spherical_geography(ST_GeometryFromText('%s')))", wkt);

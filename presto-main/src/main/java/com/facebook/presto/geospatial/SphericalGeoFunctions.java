@@ -22,7 +22,10 @@ import com.esri.core.geometry.Point;
 import com.esri.core.geometry.Polygon;
 import com.esri.core.geometry.ogc.OGCGeometry;
 import com.esri.core.geometry.ogc.OGCGeometryCollection;
+import com.esri.core.geometry.ogc.OGCMultiPolygon;
 import com.esri.core.geometry.ogc.OGCPoint;
+import com.esri.core.geometry.ogc.OGCPolygon;
+import com.facebook.airlift.log.Logger;
 import com.facebook.presto.common.block.Block;
 import com.facebook.presto.common.type.KdbTreeType;
 import com.facebook.presto.geospatial.serde.EsriGeometrySerde;
@@ -34,6 +37,7 @@ import com.facebook.presto.spi.function.SqlType;
 import io.airlift.slice.Slice;
 
 import java.util.EnumSet;
+import java.util.Objects;
 
 import static com.facebook.presto.common.type.StandardTypes.DOUBLE;
 import static com.facebook.presto.common.type.StandardTypes.VARCHAR;
@@ -65,6 +69,7 @@ import static java.lang.String.format;
 
 public final class SphericalGeoFunctions
 {
+    private static final Logger log = Logger.get(SphericalGeoFunctions.class);
     private static final EnumSet<Geometry.Type> GEOMETRY_TYPES_FOR_SPHERICAL_GEOGRAPHY = EnumSet.of(
             Type.Point, Type.Polyline, Type.Polygon, Type.MultiPoint);
 
@@ -302,6 +307,94 @@ public final class SphericalGeoFunctions
                     z3DTotal / centroidVectorLength).asSphericalPoint();
         }
         return EsriGeometrySerde.serialize(new OGCPoint(centroid, geometryCollection.getEsriSpatialReference()));
+    }
+
+    @SqlNullable
+    @ScalarFunction("latlong_dist_to_multipolygon")
+    @Description("Returns distance between a lat,long coordinate to a multipolygon on a sphere, in km")
+    @SqlType(DOUBLE)
+    public static Double latlongDistToMultipolygon(@SqlType(DOUBLE) double latitude, @SqlType(DOUBLE) double longitude, @SqlType(SPHERICAL_GEOGRAPHY_TYPE_NAME) Slice wkt)
+    {
+        Point origin = new Point(longitude, latitude);
+        double minDistance = Double.MAX_VALUE;
+
+        OGCGeometry geometry = EsriGeometrySerde.deserialize(wkt);
+        if (!Objects.equals(geometry.geometryType(), OGCMultiPolygon.TYPE) && !Objects.equals(geometry.geometryType(), OGCPolygon.TYPE)) {
+            throw new PrestoException(INVALID_FUNCTION_ARGUMENT, format("%s is not supported, please provide Polygon or MultiPolygon instead.", geometry.geometryType()));
+        }
+        System.out.println("Start---");
+        if (Objects.equals(geometry.geometryType(), OGCPolygon.TYPE)) {
+            Polygon polygon = (Polygon) geometry.getEsriGeometry();
+            int i = 0;
+            boolean hasNotHitLast = true;
+            while (hasNotHitLast) {
+                System.out.println(i);
+                Point p1 = new Point();
+                Point p2 = new Point();
+                polygon.getPoint(i, p1);
+                try {
+                    polygon.getPoint(i + 1, p2);
+                }
+                catch (Exception e) {
+                    System.out.println("In exception 1");
+                    System.out.println(e.getMessage());
+                    p2 = polygon.getPoint(0);
+                    hasNotHitLast = false;
+                }
+                if (p2 == null) {
+                    System.out.println("Defaulting to 0");
+                    p2 = polygon.getPoint(0);
+                }
+                System.out.println("Arc: " + p1.getX() + " " + p1.getY() + " to " + p2.getX() + " " + p2.getY());
+
+                double dist = SphericalGeographyUtils.distanceBetweenPointToArc(origin, p1, p2);
+                System.out.println(dist + "");
+                if (dist < minDistance) {
+                    minDistance = dist;
+                }
+                System.out.println(minDistance + "");
+                i += 1;
+            }
+        }
+        else if (Objects.equals(geometry.geometryType(), OGCMultiPolygon.TYPE)) {
+            MultiPath lineString = (MultiPath) geometry.getEsriGeometry();
+
+            double sum = 0;
+
+            // sum up paths on (multi)linestring
+            for (int path = 0; path < lineString.getPathCount(); path++) {
+                if (lineString.getPathSize(path) < 2) {
+                    continue;
+                }
+
+                int pathStart = lineString.getPathStart(path);
+                int pathEnd = lineString.getPathEnd(path);
+                System.out.println("Path start " + pathStart);
+                System.out.println("Path end " + lineString.getPathEnd(path));
+                Point prev = lineString.getPoint(pathStart);
+                for (int i = pathStart + 1; i <= lineString.getPathEnd(path); i++) {
+                    Point next = new Point();
+                    if (i == pathEnd) {
+                        lineString.getPoint(pathStart, next);
+                    }
+                    else {
+                        lineString.getPoint(i, next);
+                    }
+                    System.out.println("Arc: " + prev.getX() + " " + prev.getY() + " to " + next.getX() + " " + next.getY());
+                    double dist = SphericalGeographyUtils.distanceBetweenPointToArc(origin, prev, next);
+                    System.out.println(dist + "");
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                    }
+                    System.out.println(minDistance + "");
+
+                    prev = next;
+                }
+            }
+        }
+
+        return minDistance;
+//        return 1.23;
     }
 
     private static double computeSphericalExcess(Polygon polygon, int start, int end)

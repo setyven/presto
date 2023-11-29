@@ -75,7 +75,7 @@ public class SphericalGeographyUtils
 
     /**
      * Calculate the distance between two points on Earth.
-     *
+     * <p>
      * This assumes a spherical Earth, and uses the Vincenty formula.
      * (https://en.wikipedia.org/wiki/Great-circle_distance)
      */
@@ -107,12 +107,85 @@ public class SphericalGeographyUtils
         return atan2(sqrt(t1 * t1 + t2 * t2), t3) * EARTH_RADIUS_KM;
     }
 
+    public static double haversineDistance(
+            double latitude1,
+            double longitude1,
+            double latitude2,
+            double longitude2)
+    {
+        // Check if this is required?
+        // greatCircleDistance maybe enough?
+        double lat1 = toRadians(latitude1);
+        double lon1 = toRadians(longitude1);
+        double lat2 = toRadians(latitude2);
+        double lon2 = toRadians(longitude2);
+
+        double dlon = lon2 - lon1;
+        double dlat = lat2 - lat1;
+        double a = Math.pow(Math.sin(dlat / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(dlon / 2), 2);
+        double c = 2 * Math.asin(Math.sqrt(a));
+        return EARTH_RADIUS_KM * c;
+    }
+
     public static void validateSphericalType(String function, OGCGeometry geometry, Set<GeometryType> validTypes)
     {
         GeometryType type = GeometryType.getForEsriGeometryType(geometry.geometryType());
         if (!validTypes.contains(type)) {
             throw new PrestoException(INVALID_FUNCTION_ARGUMENT, format("When applied to SphericalGeography inputs, %s only supports %s. Input type is: %s", function, OR_JOINER.join(validTypes), type));
         }
+    }
+
+    public static Point cartesianPointToPoint(CartesianPoint cp)
+    {
+        double radius = Math.sqrt(Math.pow(cp.getX(), 2) + Math.pow(cp.getY(), 2) + Math.pow(cp.getZ(), 2));
+        double longitude = Math.toDegrees(Math.atan2(cp.getY(), cp.getX()));
+        double latitude;
+        if (radius == 0) {
+            latitude = 0;
+        }
+        else {
+            latitude = Math.toDegrees(Math.asin(cp.getZ() / radius));
+        }
+
+        return new Point(longitude, latitude);
+    }
+
+    public static Point nearestPointOnGreatCircle(Point origin, Point arcStart, Point arcEnd)
+    {
+        CartesianPoint cartesianPointOrigin = new CartesianPoint(origin);
+        CartesianPoint cartesianPointArcStart = new CartesianPoint(arcStart);
+        CartesianPoint cartesianPointArcEnd = new CartesianPoint(arcEnd);
+
+        CartesianPoint arcPlane = cartesianPointArcStart.crossProduct(cartesianPointArcEnd);
+        CartesianPoint intersectingPlane = cartesianPointOrigin.crossProduct(arcPlane);
+        CartesianPoint plane = arcPlane.crossProduct(intersectingPlane);
+        return cartesianPointToPoint(plane);
+//        return new Point(10, 20);
+//        double vectorLength = Math.sqrt(Math.pow(plane.getX(), 2) + Math.pow(plane.getY(), 2) + Math.pow(plane.getZ(), 2));
+//        CartesianPoint normalizedPlane = new CartesianPoint(EARTH_RADIUS_KM * plane.getX() / vectorLength, EARTH_RADIUS_KM * plane.getY() / vectorLength, EARTH_RADIUS_KM * plane.getZ() / vectorLength);
+//        return cartesianPointToPoint(normalizedPlane);
+    }
+
+    /**
+     * @param origin: Point expected to be in earth spherical coordinates (Long, Lat), indicates the original point we want to measure the distance to the arc
+     * @param arcStart: Point expected to be in earth spherical coordinates (Long, Lat), indicates the one of the two points that forms an arc
+     * @param arcEnd: Point expected to be in earth spherical coordinates (Long, Lat), indicates the one of the two points that forms an arc
+     */
+    public static double distanceBetweenPointToArc(Point origin, Point arcStart, Point arcEnd)
+    {
+        Point nearestPoint = nearestPointOnGreatCircle(origin, arcStart, arcEnd);
+        System.out.println("Nearest point: " + nearestPoint.getX() + ", " + nearestPoint.getY());
+        double arcLength = greatCircleDistance(arcStart.getY(), arcStart.getX(), arcEnd.getY(), arcEnd.getX());
+        double distPointToStart = greatCircleDistance(arcStart.getY(), arcStart.getX(), nearestPoint.getY(), nearestPoint.getX());
+        double distPointToEnd = greatCircleDistance(arcEnd.getY(), arcEnd.getX(), nearestPoint.getY(), nearestPoint.getX());
+        final double precision = 0.001; // in km
+        if (Math.abs(arcLength - distPointToStart - distPointToEnd) < precision) {
+            return greatCircleDistance(nearestPoint.getY(), nearestPoint.getX(), origin.getY(), origin.getX());
+        }
+        double distOriginToStart = greatCircleDistance(origin.getY(), origin.getX(), arcStart.getY(), arcStart.getX());
+        double distOriginToEnd = greatCircleDistance(origin.getY(), origin.getX(), arcEnd.getY(), arcEnd.getX());
+
+        return Math.min(distOriginToStart, distOriginToEnd);
     }
 
     public static final class CartesianPoint
@@ -138,7 +211,6 @@ public class SphericalGeographyUtils
         }
 
         /**
-         *
          * @param x in cartesian coordinate
          * @param y in cartesian coordinate
          * @param z in cartesian coordinate
@@ -174,6 +246,16 @@ public class SphericalGeographyUtils
             double latitude = 90 - toDegrees(phi);
             double longitude = toDegrees(theta);
             return new Point(longitude, latitude);
+        }
+
+        public CartesianPoint crossProduct(CartesianPoint b)
+        {
+//            double xx = this.y * b.getZ() - this.z * b.getY();
+//            double yy = this.z * b.getX() - this.x * b.getZ();
+//            double zz = this.x * b.getY() - this.y * b.getX();
+//            double vectorLength = Math.sqrt(xx * xx + yy * yy + zz * zz);
+//            return new CartesianPoint(EARTH_RADIUS_KM * xx / vectorLength, EARTH_RADIUS_KM * yy / vectorLength, EARTH_RADIUS_KM * zz / vectorLength);
+            return new CartesianPoint(y * b.getZ() - z * b.getY(), z * b.getX() - x * b.getZ(), x * b.getY() - y * b.getX());
         }
     }
 }
