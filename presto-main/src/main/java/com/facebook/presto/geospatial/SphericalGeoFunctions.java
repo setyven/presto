@@ -394,7 +394,6 @@ public final class SphericalGeoFunctions
         }
 
         return minDistance;
-//        return 1.23;
     }
 
     private static double computeSphericalExcess(Polygon polygon, int start, int end)
