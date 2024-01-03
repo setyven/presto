@@ -316,12 +316,15 @@ public final class SphericalGeoFunctions
     public static Double latlongDistToMultipolygon(@SqlType(DOUBLE) double latitude, @SqlType(DOUBLE) double longitude, @SqlType(SPHERICAL_GEOGRAPHY_TYPE_NAME) Slice wkt)
     {
         Point origin = new Point(longitude, latitude);
+        System.out.println("Lat: " + latitude + ", Lon: " + longitude);
         double minDistance = Double.MAX_VALUE;
 
         OGCGeometry geometry = EsriGeometrySerde.deserialize(wkt);
-        if (!Objects.equals(geometry.geometryType(), OGCMultiPolygon.TYPE) && !Objects.equals(geometry.geometryType(), OGCPolygon.TYPE)) {
-            throw new PrestoException(INVALID_FUNCTION_ARGUMENT, format("%s is not supported, please provide Polygon or MultiPolygon instead.", geometry.geometryType()));
-        }
+
+        validateSphericalType("latlong_dist_to_multipolygon", geometry, EnumSet.of(POLYGON, MULTI_POLYGON));
+//        if (!Objects.equals(geometry.geometryType(), OGCMultiPolygon.TYPE) && !Objects.equals(geometry.geometryType(), OGCPolygon.TYPE)) {
+//            throw new PrestoException(INVALID_FUNCTION_ARGUMENT, format("%s is not supported, please provide Polygon or MultiPolygon instead.", geometry.geometryType()));
+//        }
         System.out.println("Start---");
         if (Objects.equals(geometry.geometryType(), OGCPolygon.TYPE)) {
             Polygon polygon = (Polygon) geometry.getEsriGeometry();

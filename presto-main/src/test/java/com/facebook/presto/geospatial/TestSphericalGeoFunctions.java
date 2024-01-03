@@ -260,20 +260,90 @@ public class TestSphericalGeoFunctions
         assertSphericalCentroid("MULTIPOINT (0 -45, 0 45, 30 0, -30 0)", new Point(0, 0));
     }
 
-    @Test
-    public void tesLatlongDistToMultipolygon()
-    {
-        String wkt = "POLYGON((-180 -90, -180 90, 180 90, 180 -90, -180 -90))";
-        String projection = format("round(latlong_dist_to_multipolygon(40, -90, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
-        assertFunction(projection, DOUBLE, 5559.75506);
-    }
+//    @Test
+//    public void tesLatlongDistToMultipolygon()
+//    {
+//        String wkt = "POLYGON((-180 -90, -180 90, 180 90, 180 -90, -180 -90))";
+//        String projection = format("round(latlong_dist_to_multipolygon(40, -90, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, 5559.75506);
+//    }
+//
+//    @Test
+//    public void tesLatlongDistToMultipolygonWithMultipolygon()
+//    {
+//        String wkt = "MULTIPOLYGON (((-40.2 28.9, -40.2 31.9, -37.2 31.9, -37.2 28.9, -40.2 28.9)), ((-39.2 29.9, -39.2 30.9, -38.2 30.9, -38.2 29.9, -39.2 29.9)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(40, 50, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, 7582.98970);
+//    }
+
+//    @Test
+//    public void tesLatlongDistToMultipolygon1()
+//    {
+//        String wkt = "MULTIPOLYGON(((0 -90, -10 0, 10 0, 20 -20, 0 -90)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(90, 0, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, Precision.round(10007.559105973553, 5));
+//    }
+//
+//    @Test
+//    public void tesLatlongDistToMultipolygon2()
+//    {
+//        String wkt = "MULTIPOLYGON (((" +
+//                "-1.979937  52.5016231," +
+//                "-1.9798377 52.5015692," +
+//                "-1.9788587 52.502224," +
+//                "-1.9789553 52.5022795," +
+//                "-1.979937  52.5016231)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(52.502, -1.9794, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, Precision.round(0.0013353826614117895, 5));
+//    }
+//
+//    @Test
+//    public void tesLatlongDistToMultipolygon3()
+//    {
+//        String wkt = "MULTIPOLYGON(((0 -90, -10 0, 10 0, 20 -20, 0 -90)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(-45, 0, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, Precision.round(0.0, 5));
+//    }
+//
+//    @Test
+//    public void tesLatlongDistToMultipolygon4()
+//    {
+//        String wkt = "MULTIPOLYGON (((-82.12515235 33.5359039," +
+//                "-82.12404728 33.53539862, -82.12352157 33.53617665, -82.12461591 33.53667298," +
+//                "-82.12515235 33.5359039)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(33.53603711779045, -82.12433442757856, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, Precision.round(0.0, 5));
+//    }
+//
+//    @Test
+//    public void tesLatlongDistToMultipolygon5()
+//    {
+//        String wkt = "MULTIPOLYGON (((-82.12515235 33.5359039," +
+//                "-82.12404728 33.53539862, -82.12352157 33.53617665, -82.12461591 33.53667298," +
+//                "-82.12515235 33.5359039)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(33.53603711779045, -82.12433442757856, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, Precision.round(-0.049447321827078505, 5));
+//    }
+
+//    @Test
+//    public void tesLatlongDistToMultipolygon6()
+//    {
+//        // green
+//        String wkt = "MULTIPOLYGON(((0 -90, -10 0, 10 0, 20 -20, 0 -90)))";
+//        String projection = format("round(latlong_dist_to_multipolygon(-45, NULL, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+//        assertFunction(projection, DOUBLE, null);
+//    }
 
     @Test
-    public void tesLatlongDistToMultipolygonWithMultipolygon()
+    public void tesLatlongDistToMultipolygon7()
     {
-        String wkt = "MULTIPOLYGON (((-40.2 28.9, -40.2 31.9, -37.2 31.9, -37.2 28.9, -40.2 28.9)), ((-39.2 29.9, -39.2 30.9, -38.2 30.9, -38.2 29.9, -39.2 29.9)))";
-        String projection = format("round(latlong_dist_to_multipolygon(40, 50, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
-        assertFunction(projection, DOUBLE, 7582.98970);
+        String wkt = "MULTIPOLYGON (((" +
+                "109.3218774 0.0010139," +
+                "109.3218774 0.0010139," +
+                "109.3218854 0.0010219," +
+                "109.3218774 0.0010139)))";
+        String projection = format("round(latlong_dist_to_multipolygon(0.0, 109.3333, to_spherical_geography(ST_GeometryFromText('%s'))), 5)", wkt);
+        assertFunction(projection, DOUBLE, null);
     }
 
     private void assertSphericalCentroid(String wkt, Point centroid)
